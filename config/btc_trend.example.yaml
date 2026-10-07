@@ -1,0 +1,63 @@
+# BTC 추세 추종 — 들어가거나(100% BTC) 빠지거나(100% 현금).
+#
+# **종목이 하나면 '비중 전략'은 할 일이 없다.** 동일비중이든 리스크패리티든
+# 결과가 100% BTC 보유와 똑같아진다. 하나짜리 포트폴리오에서 판단할 거리가
+# 있는 것은 **얼마나 담을까**가 아니라 **담을까 말까**뿐이다.
+#
+# 그래서 절대 모멘텀만 쓴다. 최근 수익률이 플러스면 BTC, 마이너스면 현금.
+# 기준선은 '그냥 계속 들고 있기'이고, 전략이 한 일은 그 차이다.
+
+name: "BTC 추세"
+base_currency: "KRW"
+default_market: "UPBIT_KRW"
+
+assets:
+  - ticker: "KRW-BTC"
+    market: UPBIT_KRW
+    currency: KRW
+    name: "비트코인"
+
+strategy:
+  type: dual_momentum
+  params:
+    # top_n: 1 · 종목이 하나뿐이니 고를 것은 없다. 남는 것은 절대 모멘텀이다.
+    # safe_asset 없음 -> 탈락하면 현금.
+    lookbacks: [30, 60, 90]
+    top_n: 1
+    absolute_threshold: 0.0   # 최근 수익률이 0보다 커야 담는다. 아니면 현금.
+
+backtest:
+  start: "2024-01-01"
+  initial_cash: 10000000
+  rebalance: "W"        # 주 1회. 일 1회로 두면 비용이 수익을 먹는다(아래 참고).
+  band: 0.0
+  execution: "next_open"
+  allow_fractional: true    # 코인은 소수점 거래가 된다. BTC 1개는 1억이 넘는다.
+  min_trade_value: 10000    # 업비트 KRW 최소 주문 금액에 맞춰 조정할 것
+
+# 비용: 업비트 일반주문 0.05% + 슬리피지. 왕복 0.20%.
+#   **예약주문(0.139%)을 쓰면 왕복 0.378%가 된다. 쓰지 말 것.**
+#   하루 1회 매매하면 연 73%가 비용으로 나간다. 주 1회여도 연 10% 남짓이다.
+#   이 숫자를 넘길 자신이 없으면 그냥 들고 있는 편이 낫다.
+
+data:
+  source: csv
+  path: data/csv
+
+execution:
+  broker: paper          # 업비트 주문은 아직 만들지 않았다. 검증이 먼저다.
+  state_path: .state/btc_account.json
+  min_trade_value: 10000
+  band: 0.0
+  allow_fractional: true
+
+risk:
+  # **주식 수치를 그대로 쓰면 안 된다.** 코인은 변동성이 3~5배라, 주식에서
+  # 비상 상황인 -25%가 여기서는 평범한 조정이다. 매달 발동하는 장치는
+  # 장치가 아니라 소음이다. 실제 낙폭을 재본 뒤에 정해야 한다.
+  max_position_weight: 1.0     # 한 종목뿐이라 100%를 허용해야 한다
+  max_order_pct: 1.0
+  max_total_notional_pct: 1.0
+  max_orders: 5
+  max_drawdown_stop: null      # 데이터로 분포를 본 뒤에 정한다
+  min_price: 0.0
