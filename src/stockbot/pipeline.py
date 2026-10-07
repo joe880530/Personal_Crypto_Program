@@ -35,6 +35,8 @@ MARKET_PROVIDERS: dict[str, str] = {
     "KR_ETF": "krx",
     "US": "yahoo",
     "ZERO": "yahoo",
+    "UPBIT_KRW": "upbit",
+    "UPBIT_KRW_RESERVED": "upbit",
 }
 
 
@@ -47,6 +49,17 @@ def provider_kind(market: str) -> str:
             f"데이터 제공자를 모르는 시장입니다: {market!r}. "
             f"사용 가능: {sorted(MARKET_PROVIDERS)}"
         ) from None
+
+
+def _upbit_provider(cache=None) -> PriceProvider:
+    """업비트 제공자. 캐시 인자는 받기만 하고 쓰지 않는다.
+
+    업비트는 공개 API라 인증이 없고 호출 한도도 넉넉해서(분당 600건) 캐시가
+    없어도 느리지 않다. 다른 제공자와 호출 모양을 맞추려고 인자만 받는다.
+    """
+    from .data.upbit import UpbitProvider
+
+    return UpbitProvider()
 
 
 def build_loader(config: AppConfig, cache_dir: str = "data/cache") -> MarketDataLoader:
@@ -66,7 +79,8 @@ def build_loader(config: AppConfig, cache_dir: str = "data/cache") -> MarketData
         fx_provider = CsvProvider(root)
     else:
         cache = PriceCache(cache_dir)
-        builders = {"krx": KrxProvider, "yahoo": YahooProvider}
+        builders = {"krx": KrxProvider, "yahoo": YahooProvider,
+                    "upbit": _upbit_provider}
         for market in markets:
             providers[market] = builders[provider_kind(market)](cache=cache)
         fx_provider = FxProvider(cache=cache)

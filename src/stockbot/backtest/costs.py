@@ -50,6 +50,13 @@ PRESETS: dict[str, CostModel] = {
     "KR_ETF": CostModel(commission_bps=1.5, slippage_bps=4.0, sell_tax_bps=0.0),
     # 미국 주식/ETF: 수수료 ~0.07~0.25%, SEC 수수료는 매도에만 소액
     "US": CostModel(commission_bps=7.0, slippage_bps=5.0, sell_tax_bps=0.3),
+    # 업비트 KRW 마켓. 사용자 계정에서 확인한 수치(2026-10-07):
+    #   일반주문(지정가/시장가) 0.05%,  예약주문 KRW 0.139%
+    # **예약주문을 쓰면 안 된다.** 왕복 0.278%로 일반주문의 2.8배다.
+    # 호가 단위가 가격대마다 달라 슬리피지는 넉넉히 잡는다. 거래세는 없다.
+    "UPBIT_KRW": CostModel(commission_bps=5.0, slippage_bps=5.0, sell_tax_bps=0.0),
+    # 같은 조건에서 예약주문을 썼을 때. 비교용으로만 둔다.
+    "UPBIT_KRW_RESERVED": CostModel(commission_bps=13.9, slippage_bps=5.0, sell_tax_bps=0.0),
     "ZERO": CostModel(commission_bps=0.0, slippage_bps=0.0, sell_tax_bps=0.0),
 }
 
