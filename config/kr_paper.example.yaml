@@ -1,0 +1,92 @@
+# 한국투자증권 모의투자 검증용 설정.
+#
+# 목적은 수익이 아니라 "주문이 실제로 나가고 계좌에 반영되는가"를 확인하는 것이다.
+# 그래서 국내 ETF 2종목만 담는다. 파이프라인이 끝까지 도는 걸 확인한 뒤에
+# config/portfolio.example.yaml 쪽으로 종목을 늘리면 된다.
+#
+# 쓰는 법:
+#   copy config\kr_paper.example.yaml config\portfolio.yaml
+#   (portfolio.yaml은 .gitignore에 있어 커밋되지 않는다)
+
+name: kr-paper-trial
+base_currency: KRW
+default_market: KR_ETF
+
+# ---------------------------------------------------------------- 투자 대상
+# 국내 상장 ETF만 담는다. KIS 브로커는 현재 국내주식 주문 API만 구현돼 있어서
+# 미국 티커(SPY 등)를 넣으면 주문 단계에서 실패한다.
+assets:
+  - {ticker: "069500", market: KR_ETF, currency: KRW, name: "KODEX 200"}
+  - {ticker: "114260", market: KR_ETF, currency: KRW, name: "KODEX 국고채3년"}
+
+# ---------------------------------------------------------------- 전략
+# 균등비중 = 주식 50% / 채권 50%.
+# 워크포워드에서 전략 선택이 잡음을 따라간다는 결과가 나왔으므로
+# 파라미터가 없는 쪽으로 고정한다(근거는 portfolio.example.yaml 주석 참고).
+strategy:
+  type: equal
+
+# ---------------------------------------------------------------- 백테스트
+backtest:
+  start: "2015-01-01"
+  end: null
+  initial_cash: 10000000
+  rebalance: M
+  band: 0.03
+  execution: next_open
+  allow_fractional: false
+  cash_rate: 0.03
+  min_trade_value: 50000
+  risk_free: 0.03
+
+# ---------------------------------------------------------------- 데이터
+data:
+  source: auto
+  ffill_limit: 5
+  on_missing: raise
+
+# ---------------------------------------------------------------- 거래비용
+costs:
+  overrides: {}
+
+# ---------------------------------------------------------------- 주문 집행
+execution:
+  # 한국투자증권 OpenAPI를 쓴다. .env의 KIS_* 값을 읽는다.
+  # KIS_PAPER=false 를 명시하지 않는 한 모의투자 서버로만 나간다.
+  broker: kis
+  state_path: .state/paper_account.json   # kis 토큰 캐시가 이 폴더에 생긴다
+  cash_buffer: 0.005
+  min_trade_value: 100000
+  band: 0.02
+  order_type: market
+  limit_slippage: 0.003
+  allow_fractional: false
+
+# ---------------------------------------------------------------- 안전장치
+risk:
+  # 2종목 50/50이라 한 종목 비중이 0.50이 된다.
+  # 여기를 0.40으로 두면 매수 주문이 전부 안전장치에 걸려 아무것도 안 나간다.
+  max_position_weight: 0.55
+
+  # 주문 1건의 상한을 평가액 대비 비율로 잡는다.
+  # 절대액(max_order_value)만 두면 계좌 규모가 바뀔 때마다 손으로 고쳐야 하고,
+  # 잊으면 한도가 사실상 풀린 채로 돈다. 둘 다 주면 엄격한 쪽이 적용된다.
+  # 2종목 50/50이므로 한 건이 평가액의 약 50%다. 여유를 조금 둔다.
+  max_order_pct: 0.55
+
+  max_total_notional_pct: 1.0
+  max_orders: 10
+  max_drawdown_stop: 0.25
+  min_price: 0.0
+
+# ---------------------------------------------------------------- 워크포워드 검증
+# 종목이 2개뿐이라 상위 N개를 고르는 모멘텀 계열은 의미가 없어 뺐다.
+walkforward:
+  train: 756
+  test: 252
+  step: null
+  mode: rolling
+  objective: sharpe
+  candidates:
+    - {name: "균등비중", type: equal}
+    - {name: "리스크패리티", type: risk_parity, params: {lookback: 120}}

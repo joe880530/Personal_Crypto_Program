@@ -1,0 +1,8 @@
+# 줄바꿈 고정.
+#
+# 윈도우에서 받으면 git이 기본값(core.autocrlf=true)으로 줄 끝을 CRLF로 바꾼다.
+# 파이썬은 CRLF를 견디지만 셸 스크립트는 못 견딘다 — 리눅스 bash가 \r을 명령의
+# 일부로 읽어 "$'\r': command not found"로 죽는다. NAS로 옮겨 돌릴 때 실제로
+# 겪었다. 여기 적힌 파일은 어느 OS에서 받든 LF로 유지된다.
+*.sh text eol=lf
+Dockerfile text eol=lf

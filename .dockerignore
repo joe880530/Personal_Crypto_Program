@@ -1,0 +1,15 @@
+# 비밀과 상태는 이미지에 들어가면 안 된다.
+.env
+.state/
+data/cache/
+config/portfolio.yaml
+
+.git/
+.github/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+logs/

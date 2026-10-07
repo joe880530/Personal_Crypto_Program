@@ -1,0 +1,157 @@
+name: CI
+
+# 푸시할 때마다 깨끗한 환경에서 테스트와 설치 검사를 돌린다.
+# 로컬 pytest는 pyproject의 pythonpath=["src"] 덕분에 소스를 직접 import하므로
+# 패키지 설정이 깨져도 통과한다. 그 구멍을 package 잡이 막는다.
+
+# PR이 열린 브랜치에 푸시하면 push와 pull_request 두 이벤트가 모두 발생한다.
+# 양쪽을 다 받으면 모든 잡이 두 번 돌아 시간만 두 배로 쓴다. 그래서 push는
+# main으로 제한하고, 작업 브랜치는 pull_request 쪽에서만 받는다.
+# (PR을 열지 않은 브랜치는 검사가 돌지 않는다. 필요하면 Actions 탭에서
+#  workflow_dispatch로 수동 실행할 수 있다.)
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 같은 브랜치에 연달아 푸시하면 이전 실행을 취소한다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: 테스트 (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # 지원 하한(pyproject의 requires-python)과 최신 버전 양쪽을 본다.
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: 의존성 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: 테스트
+        run: pytest -q
+
+  package:
+    name: 설치 가능성 + 오프라인 스모크
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      # 편집 설치(-e)가 아니라 실제 설치. clone한 사용자와 같은 조건을 만든다.
+      - name: 비편집 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+
+      # 저장소 밖에서 실행해야 src/가 sys.path에 없다. 과거에 .gitignore의
+      # 'data/' 규칙이 src/stockbot/data/까지 제외해 커밋에서 빠진 적이 있는데,
+      # 로컬 테스트는 전부 통과하고 clone한 환경에서만 깨졌다.
+      - name: 설치본만으로 import 검사
+        run: |
+          cd "$(mktemp -d)"
+          python "$GITHUB_WORKSPACE/scripts/check_install.py"
+
+      - name: CLI 진입점 확인
+        run: |
+          cd "$(mktemp -d)"
+          stockbot --help > /dev/null
+          echo "console script 정상"
+
+      # 네트워크 의존 없이(합성 데이터) 전체 파이프라인을 한 번 돌린다.
+      # 실제 시세 제공자(Yahoo/FDR)는 CI에서 검증하지 않는다 — 외부 서비스가
+      # 죽으면 우리 코드와 무관하게 빨간불이 되기 때문이다.
+      - name: 샘플 데이터 생성
+        run: python scripts/make_sample_data.py --out data/csv
+
+      - name: 백테스트
+        run: python -m stockbot.cli backtest -c config/portfolio.sample.yaml
+
+      - name: 전략 비교
+        run: python -m stockbot.cli compare -c config/portfolio.sample.yaml
+
+      - name: 오늘의 목표 비중
+        run: python -m stockbot.cli signal -c config/portfolio.sample.yaml
+
+      - name: 워크포워드 검증
+        run: python -m stockbot.cli walkforward -c config/portfolio.sample.yaml
+
+  docker:
+    name: 컨테이너 빌드 + 스모크
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # NAS는 대부분 ARM이다. amd64에서만 되는 이미지를 넘기면
+      # 사용자가 NAS에서 처음 빌드할 때에야 깨진다. 여기서 먼저 깨지게 한다.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 이미지 빌드 (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 실행 검사는 러너와 같은 아키텍처로만 한다(에뮬레이션은 느리다).
+      - name: 실행용 이미지 로드 (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: stockbot:ci
+          cache-from: type=gha
+
+      - name: 컨테이너에서 CLI 확인
+        run: docker run --rm stockbot:ci --version
+
+      # .env 없이도 설정 점검 단계까지는 가야 한다. 키는 가짜를 넣고
+      # --offline으로 서버 접속은 건너뛴다(CI에서 KIS를 부르지 않는다).
+      - name: 컨테이너에서 checkenv (오프라인)
+        run: |
+          docker run --rm \
+            -e KIS_APP_KEY=ci-dummy-app-key-0000000000000000 \
+            -e KIS_APP_SECRET=ci-dummy-app-secret-000000000000 \
+            -e KIS_ACCOUNT=00000000 \
+            -e KIS_PRODUCT_CODE=01 \
+            -e KIS_PAPER=true \
+            -v "$PWD/config:/app/config:ro" \
+            stockbot:ci checkenv --offline -c config/kr_paper.example.yaml
+
+      - name: 비밀이 이미지에 굽히지 않았는지
+        run: |
+          # .env가 이미지에 들어가면 이미지를 가진 사람이 곧 계좌 접근 권한을 갖는다.
+          if docker run --rm --entrypoint sh stockbot:ci -c 'ls -a /app' | grep -qx '.env'; then
+            echo "이미지에 .env가 들어 있습니다" >&2
+            exit 1
+          fi
+          echo ".env 없음 확인"

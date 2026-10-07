@@ -1,0 +1,11 @@
+# --- 필수 ---
+numpy>=1.26
+pandas>=2.0
+PyYAML>=6.0
+
+# --- 데이터 소스 (선택: 쓰는 시장만 설치) ---
+# yfinance>=0.2.40          # 미국 주식/ETF
+# finance-datareader>=0.9.50  # 국내 주식/ETF + 환율
+
+# --- 개발 ---
+# pytest>=8.0

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stockbot"
+version = "0.1.0"
+description = "포트폴리오 기반 개인 주식 투자 자동화 프로그램"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26", "pandas>=2.0", "PyYAML>=6.0"]
+
+[project.optional-dependencies]
+us = ["yfinance>=0.2.40"]
+kr = ["finance-datareader>=0.9.50"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+stockbot = "stockbot.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["stockbot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

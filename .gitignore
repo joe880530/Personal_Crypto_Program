@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# 'pip install .' 가 만드는 빌드 산출물. 루트에 고정한다('/' 없이 쓰면
+# 소스 디렉터리에 build라는 이름이 생길 때 함께 제외된다).
+/build/
+/dist/
+
+# 절대 커밋 금지: API 키 / 계좌 정보
+.env
+.env.*
+!.env.example
+secrets.yaml
+/config/portfolio.yaml
+
+# 데이터 캐시 / 실행 상태.
+# 반드시 '/'로 시작해 저장소 루트에 고정할 것. 'data/'로 쓰면
+# src/stockbot/data/ 같은 소스 디렉터리까지 함께 제외된다.
+/data/
+/.state/
+/reports/out/
+
+# NAS 실행 로그 (실행 기록이라 저장소에 올릴 것이 아니다)
+/logs/
+
+# 분봉 수집 결과 (1년이면 수만 줄이다. 각자 NAS에 쌓인다)
+/data/minutes/

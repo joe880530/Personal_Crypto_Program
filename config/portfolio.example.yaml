@@ -1,0 +1,117 @@
+# 포트폴리오 설정 예시.
+# 복사해서 config/portfolio.yaml로 쓰세요(그 파일은 .gitignore에 있습니다).
+
+name: my-portfolio
+base_currency: KRW      # 모든 평가를 이 통화로 환산한다
+default_market: US
+
+# ---------------------------------------------------------------- 투자 대상
+# market: 데이터 소스와 거래비용 프리셋을 고르는 키 (US / KR / KR_ETF)
+# lot_size: 최소 거래단위. 국내 주식은 1주, 소수점 거래 미지원.
+assets:
+  - {ticker: SPY,      market: US,     currency: USD, name: "미국 S&P500"}
+  - {ticker: QQQ,      market: US,     currency: USD, name: "나스닥100"}
+  - {ticker: TLT,      market: US,     currency: USD, name: "미국 장기국채"}
+  - {ticker: GLD,      market: US,     currency: USD, name: "금"}
+  - {ticker: "069500", market: KR_ETF, currency: KRW, name: "KODEX 200"}
+  - {ticker: "114260", market: KR_ETF, currency: KRW, name: "KODEX 국고채3년"}
+
+# ---------------------------------------------------------------- 전략
+# type: fixed | equal | risk_parity | dual_momentum | momentum_risk_parity
+# 균등비중으로 고정한다.
+#
+# 2015-01 ~ 2026-09 실제 데이터로 워크포워드를 돌린 결과:
+#   - 선택 뒤집힘 0.75  (8번의 구간 전환 중 6번 1등이 바뀜)
+#   - 학습 샤프 ↔ 검증 샤프 상관 -0.109  (선택 기준이 미래와 무관)
+#   - 학습 2등(샤프 1.36) 구간이 검증에서 최악(-1.00)이 되기도 함
+# 즉 '어느 전략이 좋은지' 고르는 행위 자체가 잡음을 따라가고 있었다.
+# 그럴 때는 파라미터가 없어 과최적화할 여지가 가장 적은 쪽이 낫다.
+# 구간별 학습에서도 균등이 9번 중 5번으로 가장 자주 1등이었다.
+#
+# 다른 전략을 쓰려면 아래를 바꾸고, 반드시 walkforward로 다시 재보세요.
+strategy:
+  type: equal
+
+# 참고 — 이전에 쓰던 설정(되돌리려면 위 strategy를 지우고 이걸 쓰세요):
+# strategy:
+#   type: momentum_risk_parity
+#   params:
+#     momentum:
+#       lookbacks: [21, 63, 126, 252]   # 1/3/6/12개월
+#       top_n: 3                         # 상위 3종목 보유
+#       safe_asset: "114260"             # 절대 모멘텀 탈락분의 대피처
+#       absolute_threshold: 0.0          # 이 수익률 미만이면 대피
+#     sizer:
+#       lookback: 120                    # 공분산 추정 기간
+#       method: erc                      # erc | inverse_vol
+#       max_weight: 0.40                 # 한 종목 비중 상한
+
+# ---------------------------------------------------------------- 백테스트
+backtest:
+  start: "2015-01-01"
+  end: null                  # null이면 오늘까지
+  initial_cash: 10000000     # 1천만원
+  rebalance: M               # D / W / M / Q / Y / never
+  band: 0.03                 # 3%p 이상 벌어질 때만 거래(비용 절감)
+  execution: next_open       # 신호 다음 봉 시가 체결 (미래참조 방지)
+  allow_fractional: false    # 국내 주식은 소수점 매매 불가
+  cash_rate: 0.03            # 현금 연이자 3%
+  min_trade_value: 50000     # 5만원 미만 주문은 건너뜀
+  risk_free: 0.03            # 샤프 계산용 무위험수익률
+
+# ---------------------------------------------------------------- 데이터
+data:
+  source: auto               # auto(온라인) | csv(로컬 파일만)
+  # path: data/csv           # source: csv 일 때 CSV 디렉터리
+  ffill_limit: 5             # 결측 종가를 앞 값으로 채울 최대 일수
+  on_missing: raise          # 종목 데이터를 못 받았을 때: raise(중단) | warn(경고 후 진행)
+                             # 기본이 중단인 이유: 종목이 조용히 빠지면 설정한 것과
+                             # 다른 포트폴리오를 백테스트하게 된다
+
+# ---------------------------------------------------------------- 거래비용
+costs:
+  overrides: {}              # 예: {US: ZERO} 로 시장별 프리셋 교체
+
+# ---------------------------------------------------------------- 주문 집행
+execution:
+  # paper: 로컬 모의 체결(네트워크 불필요)
+  # kis:   한국투자증권 OpenAPI. .env의 KIS_* 를 읽는다.
+  #        KIS_PAPER=false 를 명시할 때만 실계좌가 열린다.
+  broker: paper
+  state_path: .state/paper_account.json
+  cash_buffer: 0.005         # 수수료·체결오차 대비 여유 현금
+  min_trade_value: 100000    # 10만원 미만 주문은 만들지 않음
+  band: 0.02                 # 2%p 이하 괴리는 무시
+  order_type: market         # market | limit
+  limit_slippage: 0.003      # 지정가 주문 시 허용 폭 0.3%
+  allow_fractional: false
+
+# ---------------------------------------------------------------- 안전장치
+# 자동매매에서 계좌를 지키는 마지막 방어선. 넉넉하게 잡지 마세요.
+risk:
+  max_position_weight: 0.40  # 한 종목 최대 비중
+  max_order_value: 5000000   # 주문 1건 최대 금액
+  max_total_notional_pct: 1.0
+  max_orders: 30             # 1회 실행 최대 주문 건수
+  max_drawdown_stop: 0.25    # 고점 대비 -25%면 신규 매수 중단
+  min_price: 0.0
+
+# ---------------------------------------------------------------- 워크포워드 검증
+# 앞 구간(학습)에서 전략을 고르고, 바로 뒤 구간(검증)에서만 평가한다.
+# 같은 데이터로 고르고 같은 데이터로 평가하면 항상 좋아 보인다.
+walkforward:
+  train: 756                 # 학습 3년(거래일)
+  test: 252                  # 검증 1년
+  step: null                 # null이면 검증 구간이 겹치지 않게 test와 동일
+  mode: rolling              # rolling(창을 민다) | anchored(시작점 고정, 학습 구간 확장)
+  objective: sharpe          # 학습 구간에서 1등을 고르는 기준
+  # 비워두면 위 strategy 하나만 구간별로 평가한다(선택 없음).
+  candidates:
+    - {name: "균등비중", type: equal}
+    - {name: "리스크패리티", type: risk_parity, params: {lookback: 120}}
+    - {name: "듀얼모멘텀", type: dual_momentum, params: {top_n: 3, safe_asset: "114260"}}
+    - name: "모멘텀+리스크패리티"
+      type: momentum_risk_parity
+      params:
+        momentum: {top_n: 3, safe_asset: "114260"}
+        sizer: {lookback: 120, max_weight: 0.40}

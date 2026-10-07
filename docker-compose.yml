@@ -1,0 +1,21 @@
+# NAS에서 손으로 실행할 때 쓰는 정의.
+# 정기 실행은 이 파일이 아니라 NAS의 작업 스케줄러가 맡는다
+# (컨테이너를 24시간 띄워 두는 게 아니라, 필요할 때 한 번 돌리고 끝낸다).
+#
+#   docker compose run --rm bot checkenv -c config/portfolio.yaml
+#   docker compose run --rm bot account  -c config/portfolio.yaml
+#   docker compose run --rm bot trade    -c config/portfolio.yaml
+#
+# --execute는 일부러 여기에 적지 않는다. 실제 주문은 손으로 붙여야 나간다.
+
+services:
+  bot:
+    build: .
+    image: stockbot
+    env_file: .env          # 키는 이미지가 아니라 실행 시점에만 들어간다
+    volumes:
+      - ./config:/app/config:ro
+      - ./.state:/app/.state
+      - ./data/cache:/app/data/cache
+    # 무한 대기하지 않는다. 한 번 돌고 끝나는 작업이다.
+    restart: "no"
